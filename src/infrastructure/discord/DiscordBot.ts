@@ -1,19 +1,19 @@
 import { Context, Effect, Layer, Option } from "effect";
 import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
-import { AppConfig } from "../../config/Config.js";
+import { AppConfigTag } from "../../config/Config.js";
 import { DiscordMessage } from "../../domain/discord/types.js";
 import { SessionManager } from "../../application/services/SessionManager.js";
 
 export interface DiscordBotType {
-  readonly start: Effect.Effect<void, never, never>;
+  readonly start: Effect.Effect<void, any, any>;
   readonly createThread: (
     _messageId: string,
     _name: string,
-  ) => Effect.Effect<string, Error, never>;
+  ) => Effect.Effect<string, any, any>;
   readonly sendMessage: (
     _channelId: string,
     _content: string,
-  ) => Effect.Effect<void, Error, never>;
+  ) => Effect.Effect<void, any, any>;
 }
 
 export const DiscordBot = Context.GenericTag<DiscordBotType>("DiscordBot");
@@ -21,7 +21,7 @@ export const DiscordBot = Context.GenericTag<DiscordBotType>("DiscordBot");
 export const DiscordBotLive = Layer.effect(
   DiscordBot,
   Effect.gen(function* () {
-    const config = yield* AppConfig;
+    const config = yield* AppConfigTag;
 
     const client = new Client({
       intents: [
@@ -56,12 +56,12 @@ export const DiscordBotLive = Layer.effect(
           channelId: message.channelId,
           isThread: message.channel.isThread?.() ?? false,
           parentChannelId: message.channel.isThread?.()
-            ? message.channel.parentId
+            ? message.channel.parentId ?? undefined
             : undefined,
         };
 
         Effect.runPromise(
-          handleMessage(discordMessage).pipe(
+          (handleMessage(discordMessage) as any).pipe(
             Effect.catchAllCause(Effect.logError),
           ),
         );
@@ -110,23 +110,31 @@ export const DiscordBotLive = Layer.effect(
           if (Option.isSome(existingSession)) {
             yield* sendMessage(message.channelId, "Thinking...");
 
-            yield* sessionManager.continueSession({
-              threadId: message.channelId,
-              prompt: message.content,
-              sessionId: existingSession.value.sessionId,
-              sandboxId: existingSession.value.sandboxId,
-            });
+            if (Option.isSome(existingSession)) {
+              yield* sessionManager.continueSession({
+                threadId: message.channelId,
+                prompt: message.content,
+                sessionId: existingSession.value.sessionId,
+                sandboxId: existingSession.value.sandboxId,
+              });
+            }
           }
         }
       });
 
     const createThreadFromMessage = (messageId: string, name: string) =>
       Effect.gen(function* () {
+        const channel = yield* Effect.tryPromise({
+          try: () => client.channels.fetch(messageId),
+          catch: (error) => new Error(`Failed to fetch channel: ${error}`),
+        });
+
+        if (!channel || !("messages" in channel)) {
+          return yield* Effect.fail(new Error("Channel not found or cannot fetch messages"));
+        }
+
         const message = yield* Effect.tryPromise({
-          try: () =>
-            client.channels
-              .fetch(message.channelId)
-              .then((channel) => channel?.messages.fetch(messageId)),
+          try: () => channel.messages.fetch(messageId),
           catch: (error) => new Error(`Failed to fetch message: ${error}`),
         });
 
@@ -164,7 +172,7 @@ export const DiscordBotLive = Layer.effect(
         }
 
         yield* Effect.tryPromise({
-          try: () => channel.send(content),
+          try: () => Promise.resolve(channel.send(content)),
           catch: (error) => new Error(`Failed to send message: ${error}`),
         });
       });

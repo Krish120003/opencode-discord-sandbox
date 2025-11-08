@@ -14,7 +14,7 @@ export interface SessionManagerType {
   }) => Effect.Effect<Session, Error, never>;
   readonly getSession: (
     _threadId: ThreadId,
-  ) => Effect.Effect<Option<Session>, Error, never>;
+  ) => Effect.Effect<Option.Option<Session>, Error, never>;
   readonly continueSession: (_params: {
     threadId: ThreadId;
     prompt: string;
@@ -28,7 +28,7 @@ export const SessionManager =
   Context.GenericTag<SessionManagerType>("SessionManager");
 
 interface SessionManagerState {
-  readonly sessions: HashMap.HashMap<ThreadId, Session>;
+  sessions: HashMap.HashMap<ThreadId, Session>;
 }
 
 const makeSessionManager = Effect.gen(function* () {
@@ -94,7 +94,7 @@ const makeSessionManager = Effect.gen(function* () {
 
     state.sessions = HashMap.filter(
       state.sessions,
-      (_, session) =>
+      (session: Session) =>
         now.getTime() - session.lastActivity.getTime() < expiredThreshold,
     );
   });
