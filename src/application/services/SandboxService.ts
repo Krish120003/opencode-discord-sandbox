@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from 'effect'
 import { SandboxExecutionRequest, SandboxExecutionResult } from '../../domain/sandbox/types.js'
-import { Config } from '../../config/Config.js'
+import { OpencodeService } from '../../infrastructure/opencode/OpencodeService.js'
 
 export interface SandboxService {
   readonly executeCode: (request: SandboxExecutionRequest) => Effect.Effect<SandboxExecutionResult, Error, never>
@@ -9,20 +9,12 @@ export interface SandboxService {
 export const SandboxService = Context.GenericTag<SandboxService>('SandboxService')
 
 const makeSandboxService = Effect.gen(function* () {
-  const config = yield* Config
+  const opencodeService = yield* OpencodeService
 
   const executeCode = (request: SandboxExecutionRequest) => Effect.gen(function* () {
-    // This will be implemented with opencode integration
-    // For now, return a mock result
-    const mockResult: SandboxExecutionResult = {
-      sessionId: request.sessionId || `session_${Date.now()}`,
-      sandboxId: `sandbox_${Date.now()}`,
-      output: `Executed: ${request.prompt}`,
-      duration: 100,
-      success: true
-    }
-
-    return mockResult
+    // Delegate to opencode service for actual execution
+    const result = yield* opencodeService.executeCode(request)
+    return result
   })
 
   return SandboxService.of({

@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Option } from 'effect'
 import { Client, GatewayIntentBits, Partials, Events } from 'discord.js'
-import { Config } from '../../config/Config.js'
+import { AppConfig } from '../../config/Config.js'
 import { DiscordMessage } from '../../domain/discord/types.js'
 import { SessionManager } from '../../application/services/SessionManager.js'
 
@@ -15,7 +15,7 @@ export const DiscordBot = Context.GenericTag<DiscordBot>('DiscordBot')
 export const DiscordBotLive = Layer.effect(
   DiscordBot,
   Effect.gen(function* () {
-    const config = yield* Config
+    const config = yield* AppConfig
     const sessionManager = yield* SessionManager
 
     const client = new Client({

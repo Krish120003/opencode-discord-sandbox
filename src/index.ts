@@ -1,15 +1,13 @@
 import { Effect, Layer } from 'effect'
 import { NodeSdk } from '@effect/platform-node'
-import { Config } from './config/Config.js'
-import { DiscordBot } from './infrastructure/discord/DiscordBot.js'
-import { SessionManager } from './application/services/SessionManager.js'
-import { SandboxService } from './application/services/SandboxService.js'
+import { AppConfig, ConfigLive } from './config/Config.js'
 
 const MainLive = Layer.mergeAll(
-  Config.Live,
+  ConfigLive,
   DiscordBotLive,
   SessionManagerLive,
-  SandboxServiceLive
+  SandboxServiceLive,
+  OpencodeServiceLive
 )
 
 const program = Effect.gen(function* () {

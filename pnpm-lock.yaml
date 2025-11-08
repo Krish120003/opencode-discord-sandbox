@@ -14,6 +14,9 @@ importers:
       '@effect/platform-node':
         specifier: ^0.60.0
         version: 0.60.5(@effect/platform@0.58.27(@effect/schema@0.75.5(effect@3.19.2))(effect@3.19.2))(effect@3.19.2)
+      '@opencode-ai/sdk':
+        specifier: ^1.0.45
+        version: 1.0.45
       '@vercel/sandbox':
         specifier: ^0.0.17
         version: 0.0.17
@@ -507,6 +510,9 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@opencode-ai/sdk@1.0.45':
+    resolution: {integrity: sha512-8IgL2kvApmKpyjt0+GV/UUQUXYbBjuu5REErgNidlrvWyQa+9tFJM/sJvB7MbPKWLo73URqJ+NWpkCw9hh0gMQ==}
 
   '@parcel/watcher-android-arm64@2.5.1':
     resolution: {integrity: sha512-KF8+j9nNbUN8vzOFDpRMsaKBHZ/mcjEjMToVMJOhTozkDonQFFrRcfdLWn6yWKCmJKmdVxSgHiYvTCef4/qcBA==}
@@ -1947,6 +1953,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
+
+  '@opencode-ai/sdk@1.0.45': {}
 
   '@parcel/watcher-android-arm64@2.5.1':
     optional: true
