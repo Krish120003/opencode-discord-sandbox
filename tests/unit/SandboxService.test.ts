@@ -9,6 +9,8 @@ import { OpencodeService } from "../../src/infrastructure/opencode/OpencodeServi
 // Mock OpencodeService
 const mockOpencodeService = {
   executeCode: vi.fn(),
+  createSession: vi.fn(),
+  sendMessage: vi.fn(),
 };
 
 const MockOpencodeServiceLive = Layer.succeed(
@@ -32,19 +34,18 @@ describe("SandboxService", () => {
 
     mockOpencodeService.executeCode.mockResolvedValue(mockResult);
 
-    const sandboxService = Effect.runSync(
-      Effect.service(SandboxService).pipe(
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sandboxService = yield* SandboxService;
+        return yield* sandboxService.executeCode({
+          prompt: 'console.log("test")',
+          sessionId: "session-123",
+          sandboxId: "sandbox-456",
+        });
+      }).pipe(
         Effect.provide(SandboxServiceLive),
         Effect.provide(MockOpencodeServiceLive),
       ),
-    );
-
-    const result = await Effect.runPromise(
-      sandboxService.executeCode({
-        prompt: 'console.log("test")',
-        sessionId: "session-123",
-        sandboxId: "sandbox-456",
-      }),
     );
 
     expect(result).toEqual(mockResult);
@@ -59,18 +60,17 @@ describe("SandboxService", () => {
     const mockError = new Error("Execution failed");
     mockOpencodeService.executeCode.mockRejectedValue(mockError);
 
-    const sandboxService = Effect.runSync(
-      Effect.service(SandboxService).pipe(
-        Effect.provide(SandboxServiceLive),
-        Effect.provide(MockOpencodeServiceLive),
-      ),
-    );
-
     await expect(
       Effect.runPromise(
-        sandboxService.executeCode({
-          prompt: "invalid code",
-        }),
+        Effect.gen(function* () {
+          const sandboxService = yield* SandboxService;
+          return yield* sandboxService.executeCode({
+            prompt: "invalid code",
+          });
+        }).pipe(
+          Effect.provide(SandboxServiceLive),
+          Effect.provide(MockOpencodeServiceLive),
+        ),
       ),
     ).rejects.toThrow("Execution failed");
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect, Layer } from "effect";
-import { AppConfig, ConfigLive } from "../../src/config/Config.js";
+import { AppConfigTag, ConfigLive } from "../../src/config/Config.js";
 import { OpencodeService } from "../../src/infrastructure/opencode/OpencodeService.js";
 import { SandboxService } from "../../src/application/services/SandboxService.js";
 import { SessionManager } from "../../src/application/services/SessionManager.js";
@@ -96,7 +96,9 @@ describe("Integration Tests", () => {
 
     // This would normally start the bot, but we'll just test the setup
     const config = await Effect.runPromise(
-      Effect.config(AppConfig).pipe(Effect.provide(ConfigLive)),
+      Effect.gen(function* () {
+        return yield* AppConfigTag;
+      }).pipe(Effect.provide(ConfigLive)),
     );
 
     expect(config.discord.token).toBe(mockEnv.DISCORD_BOT_TOKEN);
@@ -118,17 +120,18 @@ describe("Integration Tests", () => {
     mockOpencodeService.executeCode.mockResolvedValue(mockExecutionResult);
 
     // Test the flow through the services
-    const sessionManager = Effect.runSync(
-      Effect.service(SessionManager).pipe(
-        Effect.provide(MockSessionManagerLive),
-      ),
-    );
-
     const result = await Effect.runPromise(
-      sessionManager.createSession({
-        threadId: "thread-789",
-        prompt: "Initial prompt",
-      }),
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
+        return yield* sessionManager.createSession({
+          threadId: "thread-789",
+          prompt: "Initial prompt",
+        });
+      }).pipe(
+        Effect.provide(MockSessionManagerLive),
+        Effect.provide(MockSandboxServiceLive),
+        Effect.provide(MockOpencodeServiceLive),
+      ),
     );
 
     expect(result.threadId).toBe("thread-789");

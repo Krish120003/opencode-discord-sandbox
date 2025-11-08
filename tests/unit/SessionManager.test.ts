@@ -32,18 +32,18 @@ describe("SessionManager", () => {
 
     mockSandboxService.executeCode.mockResolvedValue(mockResult);
 
-    const sessionManager = Effect.runSync(
-      Effect.service(SessionManager).pipe(
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
+        return yield* sessionManager.createSession({
+          threadId: "thread-789",
+          prompt: "Hello, world!",
+        });
+      }).pipe(
         Effect.provide(SessionManagerLive),
         Effect.provide(MockSandboxServiceLive),
+        Effect.provide(MockOpencodeServiceLive),
       ),
-    );
-
-    const result = await Effect.runPromise(
-      sessionManager.createSession({
-        threadId: "thread-789",
-        prompt: "Hello, world!",
-      }),
     );
 
     expect(result.threadId).toBe("thread-789");
@@ -67,26 +67,28 @@ describe("SessionManager", () => {
 
     mockSandboxService.executeCode.mockResolvedValue(mockResult);
 
-    const sessionManager = Effect.runSync(
-      Effect.service(SessionManager).pipe(
+    // First create a session and continue it in the same Effect.gen
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
+        
+        yield* sessionManager.createSession({
+          threadId: "thread-789",
+          prompt: "Initial message",
+        });
+
+        yield* sessionManager.continueSession({
+          threadId: "thread-789",
+          prompt: "Continue conversation",
+          sessionId: "session-123",
+          sandboxId: "sandbox-456",
+        });
+      }).pipe(
         Effect.provide(SessionManagerLive),
         Effect.provide(MockSandboxServiceLive),
+        Effect.provide(MockOpencodeServiceLive),
       ),
     );
-
-    // First create a session
-    await sessionManager.createSession({
-      threadId: "thread-789",
-      prompt: "Initial message",
-    });
-
-    // Then continue it
-    await sessionManager.continueSession({
-      threadId: "thread-789",
-      prompt: "Continue conversation",
-      sessionId: "session-123",
-      sandboxId: "sandbox-456",
-    });
 
     expect(mockSandboxService.executeCode).toHaveBeenCalledWith({
       prompt: "Continue conversation",
@@ -96,15 +98,15 @@ describe("SessionManager", () => {
   });
 
   it("should return none for non-existent session", async () => {
-    const sessionManager = Effect.runSync(
-      Effect.service(SessionManager).pipe(
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
+        return yield* sessionManager.getSession("non-existent-thread");
+      }).pipe(
         Effect.provide(SessionManagerLive),
         Effect.provide(MockSandboxServiceLive),
+        Effect.provide(MockOpencodeServiceLive),
       ),
-    );
-
-    const result = await Effect.runPromise(
-      sessionManager.getSession("non-existent-thread"),
     );
 
     expect(result._tag).toBe("None");
@@ -121,22 +123,22 @@ describe("SessionManager", () => {
 
     mockSandboxService.executeCode.mockResolvedValue(mockResult);
 
-    const sessionManager = Effect.runSync(
-      Effect.service(SessionManager).pipe(
+    // Create a session and retrieve it
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
+        
+        yield* sessionManager.createSession({
+          threadId: "thread-789",
+          prompt: "Hello, world!",
+        });
+
+        return yield* sessionManager.getSession("thread-789");
+      }).pipe(
         Effect.provide(SessionManagerLive),
         Effect.provide(MockSandboxServiceLive),
+        Effect.provide(MockOpencodeServiceLive),
       ),
-    );
-
-    // Create a session
-    await sessionManager.createSession({
-      threadId: "thread-789",
-      prompt: "Hello, world!",
-    });
-
-    // Retrieve it
-    const result = await Effect.runPromise(
-      sessionManager.getSession("thread-789"),
     );
 
     expect(result._tag).toBe("Some");

@@ -1,21 +1,23 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Effect, Layer } from "effect";
 import {
   OpencodeService,
   OpencodeServiceLive,
+  activeSandboxes,
 } from "../../src/infrastructure/opencode/OpencodeService.js";
-import { AppConfig } from "../../src/config/Config.js";
+import { AppConfigTag } from "../../src/config/Config.js";
 
-// Mock Opencode SDK
-const mockOpencodeClient = {
-  session: {
-    create: vi.fn(),
-    chat: vi.fn(),
-  },
+// Mock Vercel Sandbox
+const mockSandbox = {
+  runCommand: vi.fn(),
 };
 
-vi.mock("@opencode-ai/sdk", () => ({
-  default: vi.fn(() => mockOpencodeClient),
+const mockSandboxCreate = vi.fn();
+
+vi.mock("@vercel/sandbox", () => ({
+  Sandbox: {
+    create: vi.fn(),
+  },
 }));
 
 // Mock AppConfig
@@ -31,147 +33,169 @@ const mockConfig = {
   },
 };
 
-const MockAppConfigLive = Layer.succeed(AppConfig, mockConfig);
+const MockAppConfigLive = Layer.succeed(AppConfigTag, mockConfig);
 
 describe("OpencodeService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear the in-memory sandboxes map
+    activeSandboxes.clear();
+    // Setup mock environment
+    vi.stubEnv("VERCEL_OIDC_TOKEN", "test-token");
+    // Setup mock
+    const { Sandbox } = require("@vercel/sandbox");
+    Sandbox.create = mockSandboxCreate;
   });
 
   it("should create a new session", async () => {
-    const mockSession = { id: "session-123" };
-    mockOpencodeClient.session.create.mockResolvedValue(mockSession);
-
-    const opencodeService = Effect.runSync(
-      Effect.service(OpencodeService).pipe(
+    const sessionId = await Effect.runPromise(
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.createSession();
+      }).pipe(
         Effect.provide(OpencodeServiceLive),
         Effect.provide(MockAppConfigLive),
       ),
     );
 
-    const sessionId = await Effect.runPromise(opencodeService.createSession());
-
-    expect(sessionId).toBe("session-123");
-    expect(mockOpencodeClient.session.create).toHaveBeenCalledOnce();
+    expect(sessionId).toMatch(/^sandbox_\d+$/);
+    expect(mockSandboxCreate).toHaveBeenCalledWith({
+      token: undefined,
+    });
   });
 
   it("should send message to existing session", async () => {
-    const mockResponse = {
-      content: "Hello from opencode!",
+    // Setup a mock sandbox
+    const mockResult = {
+      exitCode: 0,
+      stdout: vi.fn().mockResolvedValue("Hello from Vercel Sandbox!"),
+      stderr: vi.fn().mockResolvedValue(""),
     };
-    mockOpencodeClient.session.chat.mockResolvedValue(mockResponse);
+    mockSandbox.runCommand.mockResolvedValue(mockResult);
+    mockSandboxCreate.mockResolvedValue(mockSandbox);
 
-    const opencodeService = Effect.runSync(
-      Effect.service(OpencodeService).pipe(
+    // First create a session
+    const sessionId = await Effect.runPromise(
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.createSession();
+      }).pipe(
         Effect.provide(OpencodeServiceLive),
         Effect.provide(MockAppConfigLive),
       ),
     );
 
+    // Then send a message to that session
     const response = await Effect.runPromise(
-      opencodeService.sendMessage("session-123", "Hello opencode!"),
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.sendMessage(sessionId, "console.log('Hello!')");
+      }).pipe(
+        Effect.provide(OpencodeServiceLive),
+        Effect.provide(MockAppConfigLive),
+      ),
     );
 
-    expect(response).toBe("Hello from opencode!");
-    expect(mockOpencodeClient.session.chat).toHaveBeenCalledWith(
-      "session-123",
-      {
-        message: "Hello opencode!",
-      },
-    );
+    expect(response).toBe("Hello from Vercel Sandbox!");
+    expect(mockSandbox.runCommand).toHaveBeenCalledWith("node", ["-e", "console.log('Hello!')"]);
   });
 
   it("should execute code with new session", async () => {
-    const mockSession = { id: "session-123" };
-    const mockResponse = {
-      content: "Code executed successfully!",
+    // Setup a mock sandbox
+    const mockResult = {
+      exitCode: 0,
+      stdout: vi.fn().mockResolvedValue("Hello, world!"),
+      stderr: vi.fn().mockResolvedValue(""),
     };
+    mockSandbox.runCommand.mockResolvedValue(mockResult);
+    mockSandboxCreate.mockResolvedValue(mockSandbox);
 
-    mockOpencodeClient.session.create.mockResolvedValue(mockSession);
-    mockOpencodeClient.session.chat.mockResolvedValue(mockResponse);
-
-    const opencodeService = Effect.runSync(
-      Effect.service(OpencodeService).pipe(
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.executeCode({
+          prompt: 'console.log("Hello, world!")',
+        });
+      }).pipe(
         Effect.provide(OpencodeServiceLive),
         Effect.provide(MockAppConfigLive),
       ),
     );
 
-    const result = await Effect.runPromise(
-      opencodeService.executeCode({
-        prompt: 'console.log("Hello, world!")',
-      }),
-    );
-
-    expect(result.sessionId).toBe("session-123");
-    expect(result.sandboxId).toBe("opencode_session-123");
-    expect(result.output).toBe("Code executed successfully!");
+    expect(result.sessionId).toMatch(/^sandbox_\d+$/);
+    expect(result.sandboxId).toMatch(/^vercel_sandbox_\d+$/);
+    expect(result.output).toBe("Hello, world!");
     expect(result.success).toBe(true);
     expect(result.duration).toBeGreaterThan(0);
-    expect(mockOpencodeClient.session.create).toHaveBeenCalledOnce();
-    expect(mockOpencodeClient.session.chat).toHaveBeenCalledWith(
-      "session-123",
-      {
-        message: 'console.log("Hello, world!")',
-      },
-    );
+    expect(mockSandboxCreate).toHaveBeenCalledOnce();
+    expect(mockSandbox.runCommand).toHaveBeenCalledWith("node", ["-e", 'console.log("Hello, world!")']);
   });
 
   it("should execute code with existing session", async () => {
-    const mockResponse = {
-      content: "Continued execution successful!",
+    // Setup a mock sandbox
+    const mockResult = {
+      exitCode: 0,
+      stdout: vi.fn().mockResolvedValue("Continued!"),
+      stderr: vi.fn().mockResolvedValue(""),
     };
+    mockSandbox.runCommand.mockResolvedValue(mockResult);
+    mockSandboxCreate.mockResolvedValue(mockSandbox);
 
-    mockOpencodeClient.session.chat.mockResolvedValue(mockResponse);
-
-    const opencodeService = Effect.runSync(
-      Effect.service(OpencodeService).pipe(
+    // First create a session to add it to the map
+    const sessionId = await Effect.runPromise(
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.createSession();
+      }).pipe(
         Effect.provide(OpencodeServiceLive),
         Effect.provide(MockAppConfigLive),
       ),
     );
 
+    // Clear the mock to test only the execution part
+    mockSandboxCreate.mockClear();
+
     const result = await Effect.runPromise(
-      opencodeService.executeCode({
-        prompt: 'console.log("Continued!")',
-        sessionId: "existing-session",
-        sandboxId: "existing-sandbox",
-      }),
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.executeCode({
+          prompt: 'console.log("Continued!")',
+          sessionId,
+          sandboxId: "existing-sandbox",
+        });
+      }).pipe(
+        Effect.provide(OpencodeServiceLive),
+        Effect.provide(MockAppConfigLive),
+      ),
     );
 
-    expect(result.sessionId).toBe("existing-session");
+    expect(result.sessionId).toBe(sessionId);
     expect(result.sandboxId).toBe("existing-sandbox");
-    expect(result.output).toBe("Continued execution successful!");
+    expect(result.output).toBe("Continued!");
     expect(result.success).toBe(true);
-    expect(mockOpencodeClient.session.create).not.toHaveBeenCalled();
-    expect(mockOpencodeClient.session.chat).toHaveBeenCalledWith(
-      "existing-session",
-      {
-        message: 'console.log("Continued!")',
-      },
-    );
+    expect(mockSandboxCreate).not.toHaveBeenCalled();
+    expect(mockSandbox.runCommand).toHaveBeenCalledWith("node", ["-e", 'console.log("Continued!")']);
   });
 
   it("should handle errors gracefully", async () => {
-    const error = new Error("API Error");
-    mockOpencodeClient.session.create.mockRejectedValue(error);
+    const error = new Error("Vercel Sandbox Error");
+    mockSandboxCreate.mockRejectedValue(error);
 
-    const opencodeService = Effect.runSync(
-      Effect.service(OpencodeService).pipe(
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const opencodeService = yield* OpencodeService;
+        return yield* opencodeService.executeCode({
+          prompt: 'console.log("test")',
+        });
+      }).pipe(
         Effect.provide(OpencodeServiceLive),
         Effect.provide(MockAppConfigLive),
       ),
-    );
-
-    const result = await Effect.runPromise(
-      opencodeService.executeCode({
-        prompt: 'console.log("test")',
-      }),
     );
 
     expect(result.success).toBe(false);
     expect(result.error).toBe(
-      "Failed to create opencode session: Error: API Error",
+      "Failed to create Vercel sandbox: Error: Vercel Sandbox Error",
     );
     expect(result.output).toBe("");
   });

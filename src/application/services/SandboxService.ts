@@ -3,7 +3,7 @@ import {
   SandboxExecutionRequest,
   SandboxExecutionResult,
 } from "../../domain/sandbox/types.js";
-import { OpencodeService } from "../../infrastructure/opencode/OpencodeService.js";
+import { OpencodeService, OpencodeServiceLive } from "../../infrastructure/opencode/OpencodeService.js";
 
 export interface SandboxServiceType {
   readonly executeCode: (

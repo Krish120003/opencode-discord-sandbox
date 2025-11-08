@@ -2,7 +2,7 @@ import { Context, Effect, Layer, Option } from "effect";
 import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { AppConfigTag } from "../../config/Config.js";
 import { DiscordMessage } from "../../domain/discord/types.js";
-import { SessionManager } from "../../application/services/SessionManager.js";
+import { SessionManager, SessionManagerLive } from "../../application/services/SessionManager.js";
 
 export interface DiscordBotType {
   readonly start: Effect.Effect<void, any, any>;

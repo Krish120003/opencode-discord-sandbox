@@ -5,7 +5,7 @@ import {
   SessionId,
   SandboxId,
 } from "../../domain/discord/types.js";
-import { SandboxService } from "../services/SandboxService.js";
+import { SandboxService, SandboxServiceLive } from "../services/SandboxService.js";
 
 export interface SessionManagerType {
   readonly createSession: (_params: {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect, Layer } from "effect";
-import { AppConfig, ConfigLive } from "../../src/config/Config.js";
+import { AppConfigTag, ConfigLive } from "../../src/config/Config.js";
 
 // Mock environment variables
 const mockEnv = {
@@ -21,12 +21,12 @@ describe("Config", () => {
   });
 
   it("should load configuration from environment", async () => {
-    const program = Effect.gen(function* () {
-      const config = yield* AppConfig;
-      return config;
-    }).pipe(Effect.provide(ConfigLive));
-
-    const config = await Effect.runPromise(program);
+    const config = await Effect.runPromise(
+      Effect.gen(function* () {
+        const config = yield* AppConfigTag;
+        return config;
+      }).pipe(Effect.provide(ConfigLive)),
+    );
 
     expect(config.discord.token).toBe(mockEnv.DISCORD_BOT_TOKEN);
     expect(config.discord.channelId).toBe(mockEnv.DISCORD_CHANNEL_ID);
@@ -40,12 +40,12 @@ describe("Config", () => {
     vi.stubEnv("SANDBOX_MAX_MEMORY", undefined);
     vi.stubEnv("SANDBOX_MAX_CPUS", undefined);
 
-    const program = Effect.gen(function* () {
-      const config = yield* AppConfig;
-      return config;
-    }).pipe(Effect.provide(ConfigLive));
-
-    const config = await Effect.runPromise(program);
+    const config = await Effect.runPromise(
+      Effect.gen(function* () {
+        const config = yield* AppConfigTag;
+        return config;
+      }).pipe(Effect.provide(ConfigLive)),
+    );
 
     expect(config.sandbox.timeout).toBe(300000); // 5 minutes default
     expect(config.sandbox.maxMemory).toBe(1024); // 1GB default
@@ -56,7 +56,7 @@ describe("Config", () => {
     vi.stubEnv("DISCORD_BOT_TOKEN", undefined);
 
     const program = Effect.gen(function* () {
-      const config = yield* AppConfig;
+      const config = yield* AppConfigTag;
       return config;
     }).pipe(Effect.provide(ConfigLive));
 
