@@ -1,5 +1,4 @@
-import { Config as EffectConfig, Context, Layer, Effect, Data } from 'effect'
-import { Schema } from '@effect/schema'
+import { Config as EffectConfig, Context, Layer, Effect, Data, Schema } from 'effect'
 
 export class ConfigError extends Data.TaggedError('ConfigError')<{
   readonly message: string

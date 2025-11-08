@@ -1,4 +1,4 @@
-import { Schema } from '@effect/schema'
+import { Schema } from 'effect'
 
 export const ThreadIdSchema = Schema.String.pipe(Schema.minLength(1))
 export const SessionIdSchema = Schema.String.pipe(Schema.minLength(1))
