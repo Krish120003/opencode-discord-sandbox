@@ -1,22 +1,27 @@
-import { Context, Effect, Layer, Option } from 'effect'
-import { Client, GatewayIntentBits, Partials, Events } from 'discord.js'
-import { AppConfig } from '../../config/Config.js'
-import { DiscordMessage } from '../../domain/discord/types.js'
-import { SessionManager } from '../../application/services/SessionManager.js'
+import { Context, Effect, Layer, Option } from "effect";
+import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
+import { AppConfig } from "../../config/Config.js";
+import { DiscordMessage } from "../../domain/discord/types.js";
+import { SessionManager } from "../../application/services/SessionManager.js";
 
-export interface DiscordBot {
-  readonly start: Effect.Effect<void, never, never>
-  readonly createThread: (messageId: string, name: string) => Effect.Effect<string, Error, never>
-  readonly sendMessage: (channelId: string, content: string) => Effect.Effect<void, Error, never>
+export interface DiscordBotType {
+  readonly start: Effect.Effect<void, never, never>;
+  readonly createThread: (
+    _messageId: string,
+    _name: string,
+  ) => Effect.Effect<string, Error, never>;
+  readonly sendMessage: (
+    _channelId: string,
+    _content: string,
+  ) => Effect.Effect<void, Error, never>;
 }
 
-export const DiscordBot = Context.GenericTag<DiscordBot>('DiscordBot')
+export const DiscordBot = Context.GenericTag<DiscordBotType>("DiscordBot");
 
 export const DiscordBotLive = Layer.effect(
   DiscordBot,
   Effect.gen(function* () {
-    const config = yield* AppConfig
-    const sessionManager = yield* SessionManager
+    const config = yield* AppConfig;
 
     const client = new Client({
       intents: [
@@ -30,124 +35,144 @@ export const DiscordBotLive = Layer.effect(
         Partials.User,
         Partials.ThreadMember,
       ],
-    })
+    });
 
     const start = Effect.gen(function* () {
       yield* Effect.async<void, never>((resume) => {
         client.once(Events.ClientReady, () => {
-          console.log(`Discord bot logged in as ${client.user?.tag}`)
-          resume(Effect.void)
-        })
-      })
+          // eslint-disable-next-line no-undef
+          console.log(`Discord bot logged in as ${client.user?.tag}`);
+          resume(Effect.void);
+        });
+      });
 
       client.on(Events.MessageCreate, (message) => {
-        if (message.author?.bot) return
+        if (message.author?.bot) return;
 
         const discordMessage: DiscordMessage = {
           id: message.id,
-          content: message.content || '',
+          content: message.content || "",
           authorId: message.author.id,
           channelId: message.channelId,
           isThread: message.channel.isThread?.() ?? false,
-          parentChannelId: message.channel.isThread?.() ? message.channel.parentId : undefined
-        }
+          parentChannelId: message.channel.isThread?.()
+            ? message.channel.parentId
+            : undefined,
+        };
 
         Effect.runPromise(
           handleMessage(discordMessage).pipe(
-            Effect.catchAllCause(Effect.logError)
-          )
-        )
-      })
+            Effect.catchAllCause(Effect.logError),
+          ),
+        );
+      });
 
       yield* Effect.tryPromise({
         try: () => client.login(config.discord.token),
-        catch: (error) => new Error(`Failed to login to Discord: ${error}`)
-      })
-    })
+        catch: (error) => new Error(`Failed to login to Discord: ${error}`),
+      });
+    });
 
-    const handleMessage = (message: DiscordMessage) => Effect.gen(function* () {
-      const sessionManager = yield* SessionManager
+    const handleMessage = (message: DiscordMessage) =>
+      Effect.gen(function* () {
+        const sessionManager = yield* SessionManager;
 
-      // New message in the configured channel => create a thread + start a session
-      if (message.channelId === config.discord.channelId && !message.isThread) {
-        const threadName = message.content.replace(/\s+/g, ' ').trim().slice(0, 80) || 'Opencode Session'
-        
-        const threadId = yield* createThreadFromMessage(message.id, threadName)
-        
-        yield* sendMessage(message.channelId, 'Starting opencode session...')
-        
-        const session = yield* sessionManager.createSession({
-          threadId,
-          prompt: message.content
-        })
-        
-        return
-      }
+        // New message in the configured channel => create a thread + start a session
+        if (
+          message.channelId === config.discord.channelId &&
+          !message.isThread
+        ) {
+          const threadName =
+            message.content.replace(/\s+/g, " ").trim().slice(0, 80) ||
+            "Opencode Session";
 
-      // Message inside a thread that has a session => continue that session
-      if (message.isThread) {
-        const existingSession = yield* sessionManager.getSession(message.channelId)
-        
-        if (Option.isSome(existingSession)) {
-          yield* sendMessage(message.channelId, 'Thinking...')
-          
-          yield* sessionManager.continueSession({
-            threadId: message.channelId,
+          const threadId = yield* createThreadFromMessage(
+            message.id,
+            threadName,
+          );
+
+          yield* sendMessage(message.channelId, "Starting opencode session...");
+
+          yield* sessionManager.createSession({
+            threadId,
             prompt: message.content,
-            sessionId: existingSession.value.sessionId,
-            sandboxId: existingSession.value.sandboxId
-          })
+          });
+
+          return;
         }
-      }
-    })
 
-    const createThreadFromMessage = (messageId: string, name: string) => Effect.gen(function* () {
-      const message = yield* Effect.tryPromise({
-        try: () => client.channels.fetch(message.channelId).then(channel => 
-          channel?.messages.fetch(messageId)
-        ),
-        catch: (error) => new Error(`Failed to fetch message: ${error}`)
-      })
+        // Message inside a thread that has a session => continue that session
+        if (message.isThread) {
+          const existingSession = yield* sessionManager.getSession(
+            message.channelId,
+          );
 
-      if (!message) {
-        return yield* Effect.fail(new Error('Message not found'))
-      }
+          if (Option.isSome(existingSession)) {
+            yield* sendMessage(message.channelId, "Thinking...");
 
-      const thread = yield* Effect.tryPromise({
-        try: () => message.startThread({
-          name,
-          autoArchiveDuration: 1440, // 24 hours
-          reason: 'Start opencode session'
-        }),
-        catch: (error) => new Error(`Failed to create thread: ${error}`)
-      })
+            yield* sessionManager.continueSession({
+              threadId: message.channelId,
+              prompt: message.content,
+              sessionId: existingSession.value.sessionId,
+              sandboxId: existingSession.value.sandboxId,
+            });
+          }
+        }
+      });
 
-      return thread.id
-    })
+    const createThreadFromMessage = (messageId: string, name: string) =>
+      Effect.gen(function* () {
+        const message = yield* Effect.tryPromise({
+          try: () =>
+            client.channels
+              .fetch(message.channelId)
+              .then((channel) => channel?.messages.fetch(messageId)),
+          catch: (error) => new Error(`Failed to fetch message: ${error}`),
+        });
 
-    const createThread = (messageId: string, name: string) => 
-      createThreadFromMessage(messageId, name)
+        if (!message) {
+          return yield* Effect.fail(new Error("Message not found"));
+        }
 
-    const sendMessage = (channelId: string, content: string) => Effect.gen(function* () {
-      const channel = yield* Effect.tryPromise({
-        try: () => client.channels.fetch(channelId),
-        catch: (error) => new Error(`Failed to fetch channel: ${error}`)
-      })
+        const thread = yield* Effect.tryPromise({
+          try: () =>
+            message.startThread({
+              name,
+              autoArchiveDuration: 1440, // 24 hours
+              reason: "Start opencode session",
+            }),
+          catch: (error) => new Error(`Failed to create thread: ${error}`),
+        });
 
-      if (!channel || !('send' in channel)) {
-        return yield* Effect.fail(new Error('Channel not found or cannot send messages'))
-      }
+        return thread.id;
+      });
 
-      yield* Effect.tryPromise({
-        try: () => channel.send(content),
-        catch: (error) => new Error(`Failed to send message: ${error}`)
-      })
-    })
+    const createThread = (messageId: string, name: string) =>
+      createThreadFromMessage(messageId, name);
+
+    const sendMessage = (channelId: string, content: string) =>
+      Effect.gen(function* () {
+        const channel = yield* Effect.tryPromise({
+          try: () => client.channels.fetch(channelId),
+          catch: (error) => new Error(`Failed to fetch channel: ${error}`),
+        });
+
+        if (!channel || !("send" in channel)) {
+          return yield* Effect.fail(
+            new Error("Channel not found or cannot send messages"),
+          );
+        }
+
+        yield* Effect.tryPromise({
+          try: () => channel.send(content),
+          catch: (error) => new Error(`Failed to send message: ${error}`),
+        });
+      });
 
     return DiscordBot.of({
       start,
       createThread,
-      sendMessage
-    })
-  })
-)
+      sendMessage,
+    }) as DiscordBotType;
+  }),
+);
