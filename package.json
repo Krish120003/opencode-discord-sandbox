@@ -1,13 +1,45 @@
 {
-  "name": "opencode-discord-sandbox",
+  "name": "effect-opencode-discord-bot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Next-generation Discord sandbox bot using Effect.ts and opencode",
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
+  "dependencies": {
+    "@effect/cli": "^0.43.0",
+    "@effect/platform": "^0.58.0",
+    "@effect/platform-node": "^0.60.0",
+    "@effect/schema": "^0.75.0",
+    "discord.js": "^14.16.3",
+    "@vercel/sandbox": "^0.0.17",
+    "effect": "^3.10.0",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["discord", "bot", "effect", "opencode", "sandbox"],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "packageManager": "pnpm@10.4.1"
 }
